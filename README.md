@@ -8,7 +8,7 @@ Extension for the vim plugin YouCompleteMe (https://github.com/Valloric/YouCompl
   \autoref{
   \cite{
 ```
-in vim's insert buffer while editing a LaTeX file. When typing ``\cite{`` suggestions from your ``*.bib`` files are loaded, otherwise labels from ``\label{...}`` commands in your ``*.tex`` files.
+in vim's insert buffer while editing a LaTeX file. When typing ``\cite{`` suggestions from your ``*.bib`` files are loaded, otherwise labels from ``\label{...}`` commands in your ``*.tex`` files. For ``\cite``ations the values of the author and title fields in the BIBtex entry are displayed in the preview window (after successful completion the preview window is closed, YouCompleteMe setting)
 
 ## How to install?
 
