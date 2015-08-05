@@ -1,11 +1,34 @@
 #!/usr/bin/env python
+"""
+    ycmd-TeX-Completer, LaTeX Completion Plugin for YouCompleteMe
+    Copyright (C) 2015  Ulrich Dorsch
 
-# adaption of https://github.com/bjoernd/vim-ycm-tex
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along
+    with this program; if not, write to the Free Software Foundation, Inc.,
+    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+"""
 
 """
+Credits for inspriation: https://github.com/bjoernd/vim-ycm-tex
+"""
+
+"""
+Place this file as well as the accompanying __init__.py and hook.py to:
+    $VIM/bundle/YouCompleteMe/third_party/ycmd/ycmd/completers/tex/
+
 Note:
-    for ':' to be recognized as part of a label you need to add a custom identifier regex
-    for tex files in:
+    for ':' and '-' to be recognized as part of a label
+    you need to add a custom identifier regex for tex files in:
        ./../../identifier_utils.py
     regex to append:
         # latex labels with ':'
@@ -14,109 +37,121 @@ Note:
 """
 
 import re
-import subprocess
-import shlex
-import glob
+import os
+import fnmatch
 import logging
-from enum import Enum
 
 from ycmd.completers.completer import Completer
 from ycmd import responses
 
-LOG = logging.getLogger(__name__)
+NO_COMPLETIONS_MESSAGE = 'No completions found; errors in the file?'
+
+_logger = logging.getLogger(__name__)
 
 class TexCompleter( Completer ):
     """
-    Completer for LaTeX that takes into account BibTex entries
-    for completion.
-    """
+    Completer for LaTeX.
 
-    # LaTeX query types we are going to see
-    class TexComplete(Enum):
-        nothing = 0
-        bib     = 1
-        label  = 2
+    autocompletes labels when typing
+        \\ref{...}
+        \\autoref{...}
+    and bibtex labels, providing helpfull display of actual title and author(s) of
+    the bibtex entry, when typing
+        \\cite{...}
+    """
 
     def __init__( self, user_options ):
         super( TexCompleter, self ).__init__( user_options )
-        self.complete_target = self.TexComplete.nothing
-
-
-    def DebugInfo( self, request_data ):
-        return "TeX completer %s" % self.complete_target
-
-
-    def ShouldUseNowInner( self, request_data ):
-        """
-        Used by YCM to determine if we want to be called for the
-        current buffer state.
-        """
-
-        # we only want to be called for \cite{} and \ref{} completions,
-        # otherwise the default completer will be just fine
-
-        line = request_data["line_value"]
-        col  = request_data["start_column"]
-        LOG.debug('"%s"' % line)
-        LOG.debug("'%s'" % line[col-5:col])
-
-        if (line[col-6:col] == r'\cite{'):
-            self.complete_target = self.TexComplete.bib
-            LOG.debug("complete target %s" % self.complete_target)
-            return True
-
-        if (line[col-5:col] == r'\ref{')  or \
-           (line[col-6:col] == r'\vref{'):
-            self.complete_target = self.TexComplete.label
-            LOG.debug("complete target %s" % self.complete_target)
-            return True
-
-        return super( TexCompleter, self ).ShouldUseNowInner( request_data )
 
 
     def SupportedFiletypes( self ):
-        """
-        Determines which vim filetypes we support
-        """
-        return ['plaintex', 'tex']
+        return ['tex']
 
 
     def _FindBibEntries(self):
         """
-        Find BIBtex entries.
+        Search for BIBtex files recursively starting at cwd as root directory.
 
-        I'm currently assuming, that Bib entries have the format
-        ^@<articletype> {<ID>,
-            <bibtex properties>
-            [..]
-        }
+        valid bib entry:
+            @<string>{<label>,
+                <item> = {...},
+                ...
+            }
+        where <string> is NOT "string", "comment" or "preamble" (.PHONY entries)
 
-        Hence, to find IDs for completion, I scan for lines starting
-        with an @ character and extract the ID from there.
+        extract label as well as author and title information (required fields)
+        for easier selection (in case you don't remember the label correctly.
 
-        The search is done by a shell pipe:
-            cat *.bib | grep ^@ | grep -v @string
+        author and title will be handed to YouCompleteMe to be displayed in
+        vim's preview window.
         """
-        bibs = " ".join(glob.glob("*.bib"))
-        cat_process  = subprocess.Popen(shlex.split("cat %s" % bibs),
-                                        stdout=subprocess.PIPE)
-        grep_process = subprocess.Popen(shlex.split("grep ^@"),
-                                        stdin=cat_process.stdout,
-                                        stdout=subprocess.PIPE)
-        cat_process.stdout.close()
-        grep2_process = subprocess.Popen(shlex.split("grep -vi @string"),
-                                         stdin=grep_process.stdout,
-                                         stdout=subprocess.PIPE)
-        grep_process.stdout.close()
 
-        lines = grep2_process.communicate()[0]
+        # find all .bib files. search recursively
+        bib_matches = []
+        for root, dirnames, filenames in os.walk('.'):
+            for filename in fnmatch.filter(filenames, '*.bib'):
+                bib_matches.append(os.path.join(root, filename))
 
+        # regex to find valid bib entries
+        # extraction of data:
+        # label: bib entry label
+        # bibitems: bib entry content
+        search_entries = re.compile(r""" #
+                ^@ # entry
+                (?!string)(?!comment)(?!preamble)   # no .PHONY entries
+                [^{]*{                              # entryname -> until {
+                (?P<label>[^},]+)                   # entry label
+                ,\n                                 # label finished
+                (?P<bibitems>(^\s.*\n)*)             # content of entry
+                ^}                                  # entry finished
+                """, re.IGNORECASE | re.UNICODE | re.MULTILINE | re.VERBOSE)
+
+        # (?:...) non-capturing (..)
+        # regex to find the author item in the bib entry body
+        search_author = re.compile(r""" # search author = {...} in items
+                ^\s*                                # line can start with whitespace
+                author                              # author item
+                \s*=\s*{                            # value of author
+                (?P<authors>.*)                     # anything until last '}' is author
+                (?: (?:},$) | (?:}$) )              # end of item, last item doesn't need ','
+                """, re.UNICODE | re.IGNORECASE | re.VERBOSE | re.MULTILINE)
+
+        # regex to find the title in the bib entry body
+        search_title = re.compile(r""" # search title = {...} in items
+                ^\s*                                # line can start with whitespace
+                title                               # title item
+                \s*=\s*{                            # value of author
+                (?P<title>.*)                       # anything until last '}' is title
+                (?: (?:},$) | (?:}$) )              # end of item, last item doesn't need ','
+                """, re.UNICODE | re.IGNORECASE | re.VERBOSE | re.MULTILINE)
+
+        # accumulate all results from all files
         ret = []
-        for l in lines.split("\n"):
-            ret.append(responses.BuildCompletionData(
-                    re.sub(r"@([A-Za-z]*)\s*{\s*([^,]*),.*", r"\2", l)
+        for bib_match in bib_matches:
+            # read each bib file
+            bib_file = open(bib_match, 'r')
+            content = bib_file.read()
+            bib_file.close()
+            # find all matches for valid entries
+            for match in search_entries.finditer(content):
+                # extract label
+                label = match.group('label')
+                # extract content of bib entry
+                bib_items = match.group('bibitems')
+                # search items in bib entry for author and title information
+                # if not present: broken bib file
+                author = search_author.search(bib_items).group('authors')
+                title = search_title.search(bib_items).group('title')
+                # gather all results
+                # label will be inserted into vim's buffer
+                # detailed_info will be displayed in vim's preview window
+                ret.append(
+                        responses.BuildCompletionData(
+                            insertion_text = label,
+                            detailed_info = "{}\n{}".format(author, title)
+                        )
                 )
-            )
+
         return ret
 
 
@@ -124,30 +159,35 @@ class TexCompleter( Completer ):
         """
         Find LaTeX labels for \ref{} completion.
 
-        This time we scan through all .tex files in the current
-        directory and extract the content of all \label{} commands
-        as sources for completion.
+        search all .tex files recursively starting frmo cwd as root
         """
-        grep_process = subprocess.Popen(shlex.split(r"grep -r --include='*.tex' \\\\label ."),
-                                        stdout=subprocess.PIPE)
 
-        lines = grep_process.communicate()[0]
+        # find all '*.tex' files
+        tex_matches = []
+        for root, dirnames, filenames in os.walk('.'):
+            for filename in fnmatch.filter(filenames, '*.tex'):
+                tex_matches.append(os.path.join(root, filename))
 
+        # regex for finding labels
+        search_label = re.compile(r"""               # search for \label{...}
+                    .*\label{               # label definition
+                    (?P<label>[^}]+)        # label
+                    }.*                     # label definition end
+                    """, re.UNICODE | re.VERBOSE)
+
+        # accumulate results from all files
         ret = []
-        for label in lines.split("\n"):
-            """
-                BuildCompletionData(
-                    insertion_text  : text to insert into buffer
-                    menu_text       : menu text
-                    extra_menu_info : menu info
-                    kind            : kind name (??)
-                    detailed_info   : detailed info for Preview Window
-                    extra_data      : extra data (??)
-            """
-            ret.append(responses.BuildCompletionData(
-                re.sub(r".*\label{([^}]*)}.*", r"\1", label)
+        for tex_match in tex_matches:
+            # read out file
+            tex_file = open(tex_match, 'r')
+            content = tex_file.read()
+            tex_file.close()
+            # append all matches to ret encapsulated as CompletionData
+            for match in search_label.finditer(content):
+                ret.append(responses.BuildCompletionData(
+                    insertion_text=match.group('label')
+                    )
                 )
-            )
 
         return ret
 
@@ -157,12 +197,20 @@ class TexCompleter( Completer ):
         Worker function executed by the asynchronous
         completion thread.
         """
-        LOG.debug("compute candidates %s" % self.complete_target)
-        if self.complete_target == self.TexComplete.label:
+        line = request_data[ 'line_value' ]
+        column = request_data[ 'start_column' ]
+        _logger.debug("line: {} :@: column: {}".format(line, column))
+
+        # select correct completion
+        if line[column-6:column-1] == r"\ref{":
+            _logger.debug("looking for labels")
             return self._FindLabels()
-        if self.complete_target == self.TexComplete.bib:
+
+        elif line[column-7:column-1] == r"\cite{":
+            _logger.debug("looking for bib entries")
             return self._FindBibEntries()
 
-        self.complete_target = self.TexComplete.nothing
-
-        return self._FindLabels() + self._FindBibEntries()
+        # no results. try adding \label{...} in your .tex files
+        # and bibentries in your .bib files
+        else:
+            raise RuntimeError( NO_COMPLETIONS_MESSAGE )
