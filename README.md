@@ -1,5 +1,4 @@
-# ycmd-TeX-Completer
-
+# YouCompleteMe LaTeX Completer Plugin
 ## What does it do?
 Extension for the vim plugin YouCompleteMe (https://github.com/Valloric/YouCompleteMe) adding LaTeX autocompletion suggestions when typing one of
 
