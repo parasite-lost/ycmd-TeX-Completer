@@ -55,6 +55,8 @@ class TexCompleter( Completer ):
     autocompletes labels when typing
         \\ref{...}
         \\autoref{...}
+        \\Cref{...}
+        \\cref{..}
     and bibtex labels, providing helpfull display of actual title and author(s) of
     the bibtex entry, when typing
         \\cite{...}
@@ -157,7 +159,7 @@ class TexCompleter( Completer ):
 
     def _FindLabels(self):
         """
-        Find LaTeX labels for \ref{} completion.
+        Find LaTeX labels for \\ref{} (and similar commands) label-completion.
 
         search all .tex files recursively starting frmo cwd as root
         """
