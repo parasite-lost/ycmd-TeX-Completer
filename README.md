@@ -45,7 +45,7 @@ and add the following lines
 ```
 let g:tex_isk='48-57,a-z,A-Z,192-255,:'
 let g:ycm_semantic_triggers={
-  \ 'tex' : ['\ref{', '\autoref{', '\cite{'],
+  \ 'tex' : ['\ref{', '\cref{', '\Cref{', '\autoref{', '\cite{'],
   \ }
 let g:ycm_autoclose_preview_window_after_completion = 1
 ```
