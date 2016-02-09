@@ -202,7 +202,8 @@ class TexCompleter( Completer ):
         _logger.debug("line: {} :@: column: {}".format(line, column))
 
         # select correct completion
-        if line[column-6:column-1] == r"\ref{":
+        if line[column-6:column-1] == r"\ref{" or line[column-7:column-1] == r"\Cref{" or \
+                line[column-7:column-1] == r"\cref{" or line[column-10:column-1] == r"\autoref{":
             _logger.debug("looking for labels")
             return self._FindLabels()
 
