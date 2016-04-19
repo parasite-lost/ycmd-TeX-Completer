@@ -142,8 +142,13 @@ class TexCompleter( Completer ):
                 bib_items = match.group('bibitems')
                 # search items in bib entry for author and title information
                 # if not present: broken bib file
-                author = search_author.search(bib_items).group('authors')
-                title = search_title.search(bib_items).group('title')
+                author = "None"
+                title = "None"
+                try:
+                    author = search_author.search(bib_items).group('authors')
+                    title = search_title.search(bib_items).group('title')
+                except:
+                    pass
                 # gather all results
                 # label will be inserted into vim's buffer
                 # detailed_info will be displayed in vim's preview window
@@ -171,10 +176,12 @@ class TexCompleter( Completer ):
                 tex_matches.append(os.path.join(root, filename))
 
         # regex for finding labels
-        search_label = re.compile(r"""               # search for \label{...}
-                    .*\label{               # label definition
-                    (?P<label>[^}]+)        # label
-                    }.*                     # label definition end
+        search_label = re.compile(r"""          # search for \label{...} or \label[type]{...}
+                    .*\label                    # label definition
+                    (?:(?:\[[a-zA-Z0-9-]*\])?)  # optional label type
+                    {                           # start label
+                    (?P<label>[^}]+)            # label
+                    }.*                         # end label
                     """, re.UNICODE | re.VERBOSE)
 
         # accumulate results from all files
