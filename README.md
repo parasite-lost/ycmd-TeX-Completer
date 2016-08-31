@@ -21,6 +21,7 @@ cd $VIM/bundle/YouCompleteMe/third_party/ycmd/ycmd/completers/
 git clone https://github.com/parasite/ycmd-TeX-Completer.git tex
 ```
 
+EDIT: The following optional modification is already present in the current version of YCMD
 __Optional__: If you want labels of the form ``lem:MyLemma`` or ``lemma-42`` to work you need to adjust the symbols YouCompleteMe accepts as part of keywords (these are recognized substrings that can be completed):
 ```
 vim $VIM/bundle/YouCompleteMe/third_party/ycmd/ycmd/identifier_utils.py
