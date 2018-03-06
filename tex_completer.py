@@ -177,7 +177,7 @@ class TexCompleter( Completer ):
 
         # regex for finding labels
         search_label = re.compile(r"""          # search for \label{...} or \label[type]{...}
-                    .*\label                    # label definition
+                    .*\\label                   # label definition (escaping \ needed now)
                     (?:(?:\[[a-zA-Z0-9-]*\])?)  # optional label type
                     {                           # start label
                     (?P<label>[^}]+)            # label
